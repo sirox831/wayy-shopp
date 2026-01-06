@@ -1,7 +1,7 @@
 {
   "name": "WAYY SHOP",
   "short_name": "WayyShop",
-  "description": "Toko Online Wayy Shop",
+  "description": "Toko Online PWA Wayy Shop",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
