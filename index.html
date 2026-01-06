@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WAYY SHOP - PWA</title>
+
+    <meta name="theme-color" content="#2196f3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="WayyShop">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <link rel="manifest" href="manifest.json">
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        :root {
+            --bg-color: #f2f6fa;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --header-bg: #2196f3;
+            --input-bg: #ffffff;
+            --input-border: #dddddd;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --header-bg: #1a73e8;
+            --input-bg: #2d2d2d;
+            --input-border: #444444;
+        }
+
+        body{margin:0;font-family: 'Segoe UI', Arial, sans-serif;background: var(--bg-color); color: var(--text-color); transition: 0.3s;}
+        header{background: var(--header-bg); color: #fff; padding: 15px; font-weight: bold; text-align: center; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2);}
+        .container{padding:15px; max-width: 600px; margin: 0 auto;}
+        .card{background: var(--card-bg); padding: 15px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 4px 8px rgba(0,0,0,.1); display: flex; align-items: center; gap: 15px; transition: 0.3s; color: var(--text-color);}
+        .card.click:hover{transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); cursor:pointer}
+        .card-content { flex-grow: 1; }
+        .prod-img { width: 70px; height: 70px; border-radius: 10px; object-fit: cover; background: #eee; flex-shrink: 0; }
+        .price{color:#2196f3; font-weight:bold}
+        .stock{float:right; padding:4px 10px; border-radius:20px; color:#fff; font-size:12px}
+        .Ada{background:#4caf50}
+        .Habis{background:#f44336}
+        button{width:100%; padding:12px; border:none; border-radius:10px; background:#2196f3; color:#fff; margin-top:8px; cursor:pointer; font-weight: bold; transition: 0.2s;}
+        button.red{background:#f44336}
+        button.green{background:#4caf50}
+        button.orange{background:#ff9800}
+        button.outline{background:transparent; border:1px solid #fff; width: auto; padding: 5px 12px; font-size: 12px;}
+        input,textarea,select{width:100%; padding:12px; margin-top:8px; border-radius:8px; border:1px solid var(--input-border); box-sizing: border-box; outline: none; background: var(--input-bg); color: var(--text-color);}
+        .hidden{display:none}
+        .detail-img, .qris{width:100%; border-radius:12px; margin-top:10px; display: block;}
+        .pay-box { background: rgba(33, 150, 243, 0.1); padding: 15px; border-radius: 10px; margin-top: 10px; border: 1px dashed #2196f3; text-align: center; }
+        #previewAdmin { width: 80px; height: 80px; object-fit: cover; margin-top: 10px; border-radius: 8px; border: 1px solid #ddd; display:none; }
+        .theme-toggle { cursor: pointer; font-size: 20px; margin-right: 10px; user-select: none; }
+    </style>
+</head>
+
+<body>
+
+<header>
+  <div style="display:flex; align-items:center">
+      <span class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</span>
+      <span onclick="window.location.href=window.location.pathname" style="cursor:pointer">🛒 WAYY SHOP</span>
+  </div>
+  <button id="btnHistoryHeader" class="outline" onclick="showHistoryPage()">Riwayat</button>
+</header>
+
+<div class="container" id="shopPage">
+    <div id="list"></div>
+</div>
+
+<div class="container hidden" id="historyPage">
+    <button onclick="backToShop()">Kembali Belanja</button>
+    <h3 style="color: var(--text-color)">Riwayat Pesanan Anda</h3>
+    <div id="historyList"></div>
+</div>
+
+<div class="container hidden" id="detailPage">
+    <button onclick="backToShop()">Kembali</button>
+    <img id="dImg" class="detail-img">
+    <h3 id="dName"></h3>
+    <p class="price" id="dPrice"></p>
+    <p id="dDesc" style="white-space: pre-line; opacity: 0.8;"></p>
+
+    <input id="buyerWA" placeholder="Nomor WhatsApp Kamu (628xxx)">
+    <input id="buyerUser" placeholder="Username / Nama Kamu">
+    
+    <label style="display:block; margin-top:10px; font-weight:bold">Pilih Pembayaran:</label>
+    <select id="payMethod" onchange="updatePayInfo()">
+        <option value="qris">QRIS</option>
+        <option value="dana">DANA</option>
+        <option value="gopay">GoPay</option>
+    </select>
+
+    <div id="paymentArea" class="hidden">
+        <div id="payInstruction" class="pay-box"></div>
+        <img id="qrisImg" class="qris hidden">
+        <button id="doneBtn" class="green" onclick="done()">Saya Sudah Transfer</button>
+    </div>
+    
+    <button id="btnOrderInitial" onclick="showPayment()">Lanjut Pembayaran</button>
+</div>
+
+<div class="container hidden" id="adminPage">
+    <h3>Admin Panel</h3>
+    <button class="red" onclick="logout()">Logout</button>
+    <hr>
+    <select id="editProduct" onchange="loadSelectedProduct()">
+        <option value="">➕ Produk Baru</option>
+    </select>
+    <input id="aName" placeholder="Nama Produk">
+    <input id="aPrice" placeholder="Harga">
+    <textarea id="aDesc" placeholder="Deskripsi"></textarea>
+    <input id="aImg" placeholder="Link Gambar Produk" oninput="showPreview(this.value)">
+    <img id="previewAdmin">
+    <input id="aQris" placeholder="Link Gambar QRIS">
+    <input id="aDana" placeholder="Nomor DANA">
+    <input id="aGopay" placeholder="Nomor GoPay">
+    <select id="aStock"><option value="Tersedia">Tersedia</option><option value="Habis">Habis</option></select>
+    <button class="green" onclick="saveProduct()">Simpan Produk</button>
+    <button id="btnDelete" class="red hidden" onclick="deleteProduct()">Hapus Produk</button>
+    <hr>
+    <h4>Order Masuk</h4>
+    <div id="orders"></div>
+</div>
+
+<script>
+// ================= PWA SERVICE WORKER REGISTRATION =================
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('PWA: Service Worker terdaftar'))
+            .catch(err => console.error('PWA: Gagal daftar SW', err));
+    });
+}
+
+// ================= THEME LOGIC =================
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute("data-theme");
+    const newTheme = currentTheme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", newTheme);
+    document.getElementById("themeBtn").innerText = newTheme === "dark" ? "☀️" : "🌙";
+    localStorage.setItem("theme", newTheme);
+}
+
+const savedTheme = localStorage.getItem("theme") || "light";
+document.documentElement.setAttribute("data-theme", savedTheme);
+window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById("themeBtn").innerText = savedTheme === "dark" ? "☀️" : "🌙";
+});
+
+// ================= FIREBASE CONFIG =================
+const firebaseConfig = {
+  apiKey: "AIzaSyDeyfth-0IOkgdMXw5zd1L6IgsKH7Q7cNg",
+  authDomain: "shop-1baf8.firebaseapp.com",
+  databaseURL: "https://shop-1baf8-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "shop-1baf8",
+  storageBucket: "shop-1baf8.firebasestorage.app",
+  messagingSenderId: "417773015016",
+  appId: "1:417773015016:web:1dbd85e004708b43de1e5d"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const auth = firebase.auth();
+const ADMIN_WA = "6287845688904"; 
+
+let currentProduct = null;
+let editId = null;
+
+// ================= NAVIGATION & LOAD DATA =================
+window.onload = function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('admin')) {
+        auth.onAuthStateChanged(user => { user ? showAdminUI() : adminLogin(); });
+    } else {
+        loadShopData();
+    }
+};
+
+function loadShopData() {
+    db.ref("products").on("value", snap => {
+        const listDiv = document.getElementById("list");
+        const dropdown = document.getElementById("editProduct");
+        if(listDiv) listDiv.innerHTML = "";
+        if(dropdown) dropdown.innerHTML = '<option value="">➕ Produk Baru</option>';
+        snap.forEach(c => {
+            let p = c.val();
+            if(listDiv) {
+                listDiv.innerHTML += `
+                <div class="card click" onclick="openProductDetail('${c.key}')">
+                  <img src="${p.img || ''}" class="prod-img">
+                  <div class="card-content">
+                    <b>${p.name}</b> <span class="stock ${p.stock}">${p.stock}</span>
+                    <div class="price">Rp${p.price}</div>
+                  </div>
+                </div>`;
+            }
+            if(dropdown) {
+                let opt = document.createElement("option"); opt.value = c.key; opt.innerText = p.name; dropdown.appendChild(opt);
+            }
+        });
+    });
+}
+
+function openProductDetail(id) {
+    db.ref("products/" + id).once("value", s => {
+        let p = s.val();
+        if(p.stock === "Habis") return Swal.fire("Habis", "Stok kosong", "error");
+        currentProduct = p;
+        document.getElementById("shopPage").classList.add("hidden");
+        document.getElementById("detailPage").classList.remove("hidden");
+        document.getElementById("btnHistoryHeader").classList.add("hidden");
+        document.getElementById("dImg").src = p.img || "";
+        document.getElementById("dName").innerText = p.name;
+        document.getElementById("dPrice").innerText = "Rp" + p.price;
+        document.getElementById("dDesc").innerText = p.desc;
+        document.getElementById("paymentArea").classList.add("hidden");
+        document.getElementById("btnOrderInitial").classList.remove("hidden");
+    });
+}
+
+// ================= PAYMENT LOGIC =================
+function showPayment() {
+    if(!buyerWA.value || !buyerUser.value) return Swal.fire("Lengkapi Data", "Isi nomor WA dan Nama", "warning");
+    document.getElementById("paymentArea").classList.remove("hidden");
+    document.getElementById("btnOrderInitial").classList.add("hidden");
+    updatePayInfo();
+}
+
+function updatePayInfo() {
+    const method = document.getElementById("payMethod").value;
+    const info = document.getElementById("payInstruction");
+    const qr = document.getElementById("qrisImg");
+    qr.classList.add("hidden");
+    
+    if(method === "qris") {
+        info.innerHTML = "Silakan scan kode QRIS di bawah ini:";
+        qr.src = currentProduct.qris;
+        qr.classList.remove("hidden");
+    } else if(method === "dana") {
+        info.innerHTML = `Transfer DANA ke:<br><b>${currentProduct.dana || 'Belum diatur'}</b><br>Atas Nama Admin`;
+    } else if(method === "gopay") {
+        info.innerHTML = `Transfer GoPay ke:<br><b>${currentProduct.gopay || 'Belum diatur'}</b><br>Atas Nama Admin`;
+    }
+}
+
+function done() {
+    let method = document.getElementById("payMethod").value;
+    let ref = db.ref("orders").push({
+        productName: currentProduct.name, price: currentProduct.price,
+        buyerWA: buyerWA.value, buyerUser: buyerUser.value,
+        payMethod: method, status: "Menunggu", time: Date.now()
+    });
+    
+    let history = JSON.parse(localStorage.getItem("my_orders") || "[]");
+    history.push(ref.key);
+    localStorage.setItem("my_orders", JSON.stringify(history));
+
+    Swal.fire("Berhasil", "Pesanan diproses!", "success").then(() => {
+        let text = `Halo Admin, saya sudah transfer via *${method.toUpperCase()}*.
+        
+\n📦 Produk: ${currentProduct.name}\n💰 Harga : Rp${currentProduct.price}\n📱 WA     : ${buyerWA.value}\n👤 User: ${buyerUser.value}\n🆔 ID  : ${ref.key}
+        
+Mohon di Proses 🙏🏻
+
+*CATATAN* 📌
+WAJIB MENGIRIM BUKTI TRANSFER`;
+        window.open(`https://wa.me/${ADMIN_WA}?text=${encodeURIComponent(text)}`);
+        backToShop();
+    });
+}
+
+function showHistoryPage() {
+    document.getElementById("shopPage").classList.add("hidden");
+    document.getElementById("historyPage").classList.remove("hidden");
+    const hList = document.getElementById("historyList");
+    let history = JSON.parse(localStorage.getItem("my_orders") || "[]");
+    if(history.length === 0) return hList.innerHTML = "Belum ada pesanan";
+    hList.innerHTML = "";
+    history.reverse().forEach(id => {
+        db.ref("orders/" + id).once("value", s => {
+            let d = s.val(); if(!d) return;
+            let statusColor = d.status === 'Selesai' ? '#4caf50' : (d.status === 'Diproses' ? '#2196f3' : '#ff9800');
+            hList.innerHTML += `
+            <div class="card" style="display:block">
+                <b>${d.productName}</b><br>
+                <small>Harga: Rp${d.price}</small><br>
+                <span style="color:${statusColor}; font-weight:bold; font-size:12px">● Status: ${d.status}</span>
+            </div>`;
+        });
+    });
+}
+
+// ================= ADMIN LOGIC =================
+async function adminLogin() {
+    const { value: form } = await Swal.fire({
+        title: 'Login Admin',
+        html: '<input id="sw-mail" class="swal2-input" placeholder="Email"><input id="sw-pass" type="password" class="swal2-input" placeholder="Password">',
+        preConfirm: () => [document.getElementById('sw-mail').value, document.getElementById('sw-pass').value]
+    });
+    if(form) auth.signInWithEmailAndPassword(form[0], form[1]).then(()=>location.reload()).catch(()=>Swal.fire("Gagal", "Cek kembali akun anda", "error"));
+}
+
+function updateOrderStatus(id, newStatus, data) {
+    db.ref('orders/' + id + '/status').set(newStatus).then(() => {
+        if (newStatus === 'Selesai') {
+            kirimStruk(data, id);
+        }
+    });
+}
+
+function kirimStruk(d, id) {
+    let pesan = `*--- STRUK PEMBELIAN ---*\n\n` +
+                `✅ *Pesanan Selesai!*\n` +
+                `🆔 Order: ${id}\n` +
+                `👤 Nama: ${d.buyerUser}\n` +
+                `📦 Produk: ${d.productName}\n` +
+                `💰 Total: Rp${d.price}\n` +
+                `💳 Metode: ${d.payMethod.toUpperCase()}\n\n` +
+                `Terima kasih sudah belanja di *WAYY SHOP*! Simpan struk ini sebagai bukti resmi.`;
+    
+    window.open(`https://wa.me/${d.buyerWA}?text=${encodeURIComponent(pesan)}`);
+}
+
+function showAdminUI() {
+    document.getElementById("shopPage").classList.add("hidden");
+    document.getElementById("adminPage").classList.remove("hidden");
+    loadShopData();
+    db.ref("orders").on("value", s => {
+        const oDiv = document.getElementById("orders"); oDiv.innerHTML = "";
+        s.forEach(o => {
+            let d = o.val();
+            let statusColor = d.status === 'Selesai' ? '#4caf50' : (d.status === 'Diproses' ? '#2196f3' : '#ff9800');
+            
+            oDiv.innerHTML += `
+            <div class="card" style="display:block; border-left: 6px solid ${statusColor}">
+                <b>${d.productName}</b> (${d.payMethod || 'Manual'})<br>
+                User: <b>${d.buyerUser}</b><br>
+                <div style="margin: 5px 0;">
+                    Status: <span style="color:${statusColor}; font-weight:bold">${d.status || 'Menunggu'}</span>
+                </div>
+                <div style="display:flex; gap:5px; margin-top:10px">
+                    <button style="width:auto;padding:8px 12px; margin-top:0" onclick="updateOrderStatus('${o.key}', 'Diproses', null)">Proses</button>
+                    <button style="width:auto;padding:8px 12px; margin-top:0" class="green" onclick="updateOrderStatus('${o.key}', 'Selesai', ${JSON.stringify(d).replace(/"/g, '&quot;')})">Selesai & Struk</button>
+                    <button style="width:auto;padding:8px 12px; margin-top:0" class="orange" onclick="window.open('https://wa.me/${d.buyerWA}?text=Halo ${d.buyerUser}, Pesanan ${d.productName} anda saat ini: ${d.status}')">Hubungi</button>
+                    <button style="width:auto;padding:8px 12px; margin-top:0" class="red" onclick="if(confirm('Hapus orderan ini?')) db.ref('orders/${o.key}').remove()">Hapus</button>
+                </div>
+            </div>`;
+        });
+    });
+}
+
+function loadSelectedProduct() {
+    editId = document.getElementById("editProduct").value;
+    if(!editId) return resetForm();
+    db.ref("products/" + editId).once("value", s => {
+        let p = s.val();
+        aName.value=p.name; aPrice.value=p.price; aDesc.value=p.desc; aImg.value=p.img;
+        aQris.value=p.qris; aDana.value=p.dana||""; aGopay.value=p.gopay||""; aStock.value=p.stock;
+        showPreview(p.img); document.getElementById("btnDelete").classList.remove("hidden");
+    });
+}
+
+function saveProduct() {
+    if(!aName.value || !aPrice.value) return Swal.fire("Eror", "Nama & Harga wajib isi", "error");
+    let data = { name:aName.value, price:aPrice.value, desc:aDesc.value, img:aImg.value, qris:aQris.value, dana:aDana.value, gopay:aGopay.value, stock:aStock.value };
+    editId ? db.ref("products/"+editId).set(data) : db.ref("products").push(data);
+    Swal.fire("Sukses", "Data disimpan", "success");
+    resetForm();
+}
+
+function resetForm() { editId=null; aName.value=aPrice.value=aDesc.value=aImg.value=aQris.value=aDana.value=aGopay.value=""; showPreview(""); document.getElementById("btnDelete").classList.add("hidden"); document.getElementById("editProduct").value=""; }
+function showPreview(u) { const p=document.getElementById("previewAdmin"); if(u){p.src=u;p.style.display="block"}else{p.style.display="none"} }
+function deleteProduct() { if(confirm("Hapus produk ini secara permanen?")) {db.ref("products/"+editId).remove(); resetForm();} }
+function logout() { auth.signOut(); location.reload(); }
+function backToShop() { 
+    document.getElementById("shopPage").classList.remove("hidden");
+    document.getElementById("historyPage").classList.add("hidden");
+    document.getElementById("detailPage").classList.add("hidden");
+    document.getElementById("btnHistoryHeader").classList.remove("hidden");
+}
+</script>
+
+</body>
+</html>
