@@ -19,6 +19,35 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <style>
+    
+    /* Style Ulasan */
+.review-box { margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px; border: 1px dashed #2196f3; }
+.rev-item { border-bottom: 1px solid #eee; padding: 8px 0; font-size: 13px; }
+.rev-star { color: #ffc107; font-size: 14px; margin-bottom: 2px; }
+.review-section { margin-top: 20px; padding-top: 15px; border-top: 2px solid #eee; }
+
+    
+    /* Notifikasi Offline */
+#offline-notice {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #f44336;
+    color: white;
+    text-align: center;
+    padding: 10px;
+    font-size: 14px;
+    z-index: 9999;
+    display: none; /* Sembunyi secara default */
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
         :root {
             --bg-color: #f2f6fa;
             --card-bg: #ffffff;
@@ -27,6 +56,35 @@
             --input-bg: #ffffff;
             --input-border: #dddddd;
         }
+        
+        /* Floating Action Button (FAB) */
+.fab-contact {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background-color: #25d366; /* Warna Hijau WhatsApp */
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    cursor: pointer;
+    z-index: 999;
+    transition: transform 0.2s;
+}
+
+.fab-contact:hover {
+    transform: scale(1.1);
+}
+
+.fab-contact svg {
+    fill: white;
+    width: 30px;
+    height: 30px;
+}
+
 
         [data-theme="dark"] {
             --bg-color: #121212;
@@ -63,6 +121,7 @@
 </head>
 
 <body>
+    
 
 <header>
   <div style="display:flex; align-items:center">
@@ -71,6 +130,11 @@
   </div>
   <button id="btnHistoryHeader" class="outline" onclick="showHistoryPage()">Riwayat</button>
 </header>
+
+<div id="offline-notice">
+    ⚠️ Koneksi terputus. Silakan cek kuota atau sambungan internet Anda.
+</div>
+
 
 <div class="container" id="shopPage">
     <div id="list"></div>
@@ -88,6 +152,11 @@
     <h3 id="dName"></h3>
     <p class="price" id="dPrice"></p>
     <p id="dDesc" style="white-space: pre-line; opacity: 0.8;"></p>
+    <div class="review-section">
+    <h4 style="margin-bottom:10px">Ulasan Pembeli</h4>
+    <div id="reviewContainer">Memuat ulasan...</div>
+</div>
+
 
     <input id="buyerWA" placeholder="Nomor WhatsApp Kamu (628xxx)">
     <input id="buyerUser" placeholder="Username / Nama Kamu">
@@ -223,6 +292,8 @@ function openProductDetail(id) {
         document.getElementById("dDesc").innerText = p.desc;
         document.getElementById("paymentArea").classList.add("hidden");
         document.getElementById("btnOrderInitial").classList.remove("hidden");
+        // TAMBAHKAN INI
+        muatUlasan(id);
     });
 }
 
@@ -277,26 +348,48 @@ WAJIB MENGIRIM BUKTI TRANSFER`;
     });
 }
 
+
 function showHistoryPage() {
     document.getElementById("shopPage").classList.add("hidden");
     document.getElementById("historyPage").classList.remove("hidden");
     const hList = document.getElementById("historyList");
     let history = JSON.parse(localStorage.getItem("my_orders") || "[]");
-    if(history.length === 0) return hList.innerHTML = "Belum ada pesanan";
+    
+    if(history.length === 0) return hList.innerHTML = "<p style='color:var(--text-color)'>Belum ada pesanan</p>";
+    
     hList.innerHTML = "";
     history.reverse().forEach(id => {
         db.ref("orders/" + id).once("value", s => {
-            let d = s.val(); if(!d) return;
+            let d = s.val(); 
+            if(!d) return;
+            
             let statusColor = d.status === 'Selesai' ? '#4caf50' : (d.status === 'Diproses' ? '#2196f3' : '#ff9800');
+            
+            // Tombol ulasan hanya muncul jika status "Selesai"
+            let btnReview = "";
+            if(d.status === 'Selesai') {
+                btnReview = `
+                <div id="btn-rev-${id}">
+                    <hr>
+                    <button class="orange" style="width:auto; padding:5px 15px; font-size:12px" 
+                        onclick="tampilFormUlasan('${id}', '${d.productName}', '${d.buyerUser}')">
+                        Beri Ulasan ⭐
+                    </button>
+                </div>`;
+            }
+
             hList.innerHTML += `
             <div class="card" style="display:block">
-                <b>${d.productName}</b><br>
+                <b style="font-size:16px">${d.productName}</b><br>
                 <small>Harga: Rp${d.price}</small><br>
                 <span style="color:${statusColor}; font-weight:bold; font-size:12px">● Status: ${d.status}</span>
+                ${btnReview}
+                <div id="form-rev-${id}"></div>
             </div>`;
         });
     });
 }
+
 
 // ================= ADMIN LOGIC =================
 async function adminLogin() {
@@ -386,7 +479,149 @@ function backToShop() {
     document.getElementById("detailPage").classList.add("hidden");
     document.getElementById("btnHistoryHeader").classList.remove("hidden");
 }
+
+function contactAdmin() {
+    const message = encodeURIComponent("Halo Admin, saya ingin bertanya tentang produk di WAYY SHOP.");
+    window.open(`https://wa.me/${ADMIN_WA}?text=${message}`, '_blank');
+}
+
+// ================= OFFLINE DETECTION LOGIC =================
+function updateOnlineStatus() {
+    const notice = document.getElementById('offline-notice');
+    if (navigator.onLine) {
+        notice.style.display = 'none'; // Sembunyikan jika online
+    } else {
+        notice.style.display = 'block'; // Tampilkan jika offline
+        
+        // Opsional: Gunakan SweetAlert jika ingin lebih terlihat jelas
+        Swal.fire({
+            icon: 'error',
+            title: 'Koneksi Terputus',
+            text: 'Sepertinya kuota Anda habis atau sinyal buruk. Beberapa fitur mungkin tidak berfungsi.',
+            confirmButtonColor: '#2196f3'
+        });
+    }
+}
+
+// Pantau perubahan status koneksi
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+
+// Cek status saat pertama kali halaman dimuat
+window.addEventListener('load', updateOnlineStatus);
+
+// Menampilkan input ulasan di riwayat
+function tampilFormUlasan(orderId, prodName, buyerName) {
+    document.getElementById(`btn-rev-${orderId}`).style.display = "none";
+    document.getElementById(`form-rev-${orderId}`).innerHTML = `
+        <div class="review-box">
+            <select id="star-${orderId}" style="width:auto; margin-bottom:5px">
+                <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+                <option value="4">⭐⭐⭐⭐ (4)</option>
+                <option value="3">⭐⭐⭐ (3)</option>
+                <option value="2">⭐⭐ (2)</option>
+                <option value="1">⭐ (1)</option>
+            </select>
+            <textarea id="text-${orderId}" placeholder="Tulis ulasan produk ini..."></textarea>
+            <button class="green" onclick="kirimUlasan('${orderId}', '${prodName}', '${buyerName}')">Kirim Ulasan</button>
+        </div>
+    `;
+}
+
+// Kirim ke Firebase
+// Fungsi Kirim Ulasan dengan Notifikasi Pop-up
+function kirimUlasan(orderId, prodName, buyerName) {
+    const star = document.getElementById(`star-${orderId}`).value;
+    const comment = document.getElementById(`text-${orderId}`).value;
+
+    if(!comment) {
+        return Swal.fire({
+            icon: 'warning',
+            title: 'Oops...',
+            text: 'Ulasan tidak boleh kosong!',
+            confirmButtonColor: '#2196f3'
+        });
+    }
+
+    // Tampilkan loading sebentar agar lebih profesional
+    Swal.fire({
+        title: 'Mengirim ulasan...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    // Cari ID Produk berdasarkan Nama
+    db.ref("products").once("value", snap => {
+        let pId = null;
+        snap.forEach(p => { if(p.val().name === prodName) pId = p.key; });
+
+        if(pId) {
+            db.ref("reviews/" + pId).push({
+                user: buyerName,
+                star: star,
+                comment: comment,
+                time: Date.now()
+            }).then(() => {
+                // NOTIFIKASI POP-UP BERHASIL
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Ulasan Terkirim!',
+                    text: 'Terima kasih telah memberikan ulasan untuk produk ini.',
+                    confirmButtonColor: '#4caf50',
+                    timer: 3000 // Otomatis tertutup dalam 3 detik
+                });
+
+                // Ubah tampilan form menjadi teks sukses di halaman riwayat
+                document.getElementById(`form-rev-${orderId}`).innerHTML = 
+                    "<div style='color:#4caf50; font-size:12px; margin-top:10px; font-weight:bold'>Ulasan telah dikirim. Terima kasih! ✅</div>";
+            }).catch((error) => {
+                // NOTIFIKASI JIKA GAGAL
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Gagal Mengirim',
+                    text: 'Terjadi kesalahan, silakan coba lagi nanti.',
+                    confirmButtonColor: '#f44336'
+                });
+            });
+        }
+    });
+}
+
+
+// Menampilkan ulasan di Detail Produk
+function muatUlasan(productId) {
+    const list = document.getElementById("reviewContainer");
+    if(!list) return;
+
+    db.ref("reviews/" + productId).on("value", snap => {
+        list.innerHTML = "";
+        if(!snap.exists()) {
+            list.innerHTML = "<p style='font-size:12px; opacity:0.6'>Belum ada ulasan produk.</p>";
+            return;
+        }
+
+        snap.forEach(c => {
+            let r = c.val();
+            list.innerHTML += `
+                <div class="rev-item">
+                    <div class="rev-star">${"⭐".repeat(r.star)}</div>
+                    <b>${r.user}</b>: ${r.comment}
+                </div>`;
+        });
+    });
+}
+
+
 </script>
+
+<div class="fab-contact" onclick="contactAdmin()" title="Hubungi Admin">
+    <svg viewBox="0 0 24 24">
+        <path d="M6.62,10.79C8.06,13.62 10.38,15.94 13.21,17.38L15.41,15.18C15.69,14.9 16.08,14.82 16.43,14.93C17.55,15.3 18.75,15.5 20,15.5A1,1 0 0,1 21,16.5V20A1,1 0 0,1 20,21A17,17 0 0,1 3,4A1,1 0 0,1 4,3H7.5A1,1 0 0,1 8.5,4C8.5,5.25 8.7,6.45 9.07,7.57C9.18,7.92 9.1,8.31 8.82,8.59L6.62,10.79Z" />
+    </svg>
+</div>
 
 </body>
 </html>
+
